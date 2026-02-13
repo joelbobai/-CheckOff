@@ -1,98 +1,212 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+type TodoItem = {
+  id: string;
+  title: string;
+  completed: boolean;
+};
 
-export default function HomeScreen() {
+const STORAGE_KEY = 'checkoff_tasks';
+
+export default function CheckOffScreen() {
+  const [tasks, setTasks] = useState<TodoItem[]>([]);
+  const [inputValue, setInputValue] = useState('');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    saveData(tasks);
+  }, [tasks]);
+
+  const loadData = async () => {
+    try {
+      const storedTasks = await AsyncStorage.getItem(STORAGE_KEY);
+      if (storedTasks) {
+        setTasks(JSON.parse(storedTasks));
+      }
+    } catch (error) {
+      console.warn('Unable to load tasks:', error);
+    }
+  };
+
+  const saveData = async (nextTasks: TodoItem[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextTasks));
+    } catch (error) {
+      console.warn('Unable to save tasks:', error);
+    }
+  };
+
+  const addTask = () => {
+    const trimmedValue = inputValue.trim();
+    if (!trimmedValue) {
+      return;
+    }
+
+    const newTask: TodoItem = {
+      id: Date.now().toString(),
+      title: trimmedValue,
+      completed: false,
+    };
+
+    setTasks((currentTasks) => [newTask, ...currentTasks]);
+    setInputValue('');
+  };
+
+  const toggleTask = (id: string) => {
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === id ? { ...task, completed: !task.completed } : task,
+      ),
+    );
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id));
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.container}>
+        <Text style={styles.heading}>CheckOff</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <View style={styles.inputRow}>
+          <TextInput
+            placeholder="Add a task"
+            value={inputValue}
+            onChangeText={setInputValue}
+            style={styles.input}
+            returnKeyType="done"
+            onSubmitEditing={addTask}
+          />
+          <Pressable onPress={addTask} style={styles.addButton}>
+            <Text style={styles.addButtonText}>Add</Text>
+          </Pressable>
+        </View>
+
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={<Text style={styles.emptyText}>No tasks yet. Add your first one.</Text>}
+          renderItem={({ item }) => (
+            <View style={styles.taskRow}>
+              <Pressable onPress={() => toggleTask(item.id)} style={styles.taskTextContainer}>
+                <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>
+                  {item.title}
+                </Text>
+              </Pressable>
+
+              <Pressable onPress={() => deleteTask(item.id)} style={styles.deleteButton}>
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </Pressable>
+            </View>
+          )}
+        />
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#f2f4f7',
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  heading: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#101828',
+    marginBottom: 16,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d0d5dd',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  addButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  listContent: {
+    gap: 10,
+    paddingBottom: 24,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#667085',
+    marginTop: 30,
+    fontSize: 15,
+  },
+  taskRow: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#eaecf0',
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 10,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  taskTextContainer: {
+    flex: 1,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  taskText: {
+    color: '#101828',
+    fontSize: 16,
+  },
+  taskTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#98a2b3',
+  },
+  deleteButton: {
+    backgroundColor: '#fee4e2',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  deleteButtonText: {
+    color: '#b42318',
+    fontWeight: '600',
   },
 });
