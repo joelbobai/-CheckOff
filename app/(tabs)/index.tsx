@@ -19,6 +19,7 @@ type TodoItem = {
 };
 
 type Filter = 'all' | 'active' | 'completed';
+type SortMode = 'newest' | 'oldest' | 'alphabetical';
 
 const STORAGE_KEY = 'checkoff_tasks';
 
@@ -26,6 +27,8 @@ export default function CheckOffScreen() {
   const [tasks, setTasks] = useState<TodoItem[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
 
   useEffect(() => {
     loadData();
@@ -41,16 +44,34 @@ export default function CheckOffScreen() {
   const completionRate = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
 
   const filteredTasks = useMemo(() => {
-    if (filter === 'active') {
-      return tasks.filter((task) => !task.completed);
-    }
+    const baseTasks = tasks.filter((task) => {
+      if (filter === 'active') {
+        return !task.completed;
+      }
 
-    if (filter === 'completed') {
-      return tasks.filter((task) => task.completed);
-    }
+      if (filter === 'completed') {
+        return task.completed;
+      }
 
-    return tasks;
-  }, [filter, tasks]);
+      return true;
+    });
+
+    const search = searchQuery.trim().toLowerCase();
+    const matchingTasks = search
+      ? baseTasks.filter((task) => task.title.toLowerCase().includes(search))
+      : baseTasks;
+
+    const sortedTasks = [...matchingTasks].sort((a, b) => {
+      if (sortMode === 'alphabetical') {
+        return a.title.localeCompare(b.title);
+      }
+
+      const byCreated = Number(a.id) - Number(b.id);
+      return sortMode === 'oldest' ? byCreated : -byCreated;
+    });
+
+    return sortedTasks;
+  }, [filter, searchQuery, sortMode, tasks]);
 
   const loadData = async () => {
     try {
@@ -103,6 +124,16 @@ export default function CheckOffScreen() {
     setTasks((currentTasks) => currentTasks.filter((task) => !task.completed));
   };
 
+  const toggleAllTasks = () => {
+    const shouldCompleteAll = tasks.some((task) => !task.completed);
+    setTasks((currentTasks) =>
+      currentTasks.map((task) => ({
+        ...task,
+        completed: shouldCompleteAll,
+      })),
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -146,6 +177,14 @@ export default function CheckOffScreen() {
           </Pressable>
         </View>
 
+        <TextInput
+          placeholder="Search tasks"
+          placeholderTextColor="#94a3b8"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
+        />
+
         <View style={styles.filterRow}>
           {(['all', 'active', 'completed'] as Filter[]).map((item) => (
             <Pressable
@@ -163,6 +202,27 @@ export default function CheckOffScreen() {
             disabled={completedCount === 0}>
             <Text style={styles.clearButtonText}>Clear done</Text>
           </Pressable>
+        </View>
+
+        <View style={styles.secondaryActionsRow}>
+          <Pressable onPress={toggleAllTasks} style={styles.secondaryActionButton}>
+            <Text style={styles.secondaryActionText}>
+              {activeCount === 0 ? 'Mark all active' : 'Mark all done'}
+            </Text>
+          </Pressable>
+
+          <View style={styles.sortRow}>
+            {(['newest', 'oldest', 'alphabetical'] as SortMode[]).map((mode) => (
+              <Pressable
+                key={mode}
+                onPress={() => setSortMode(mode)}
+                style={[styles.sortButton, sortMode === mode && styles.sortButtonActive]}>
+                <Text style={[styles.sortButtonText, sortMode === mode && styles.sortButtonTextActive]}>
+                  {mode === 'alphabetical' ? 'A-Z' : mode[0].toUpperCase() + mode.slice(1)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         <FlatList
@@ -292,6 +352,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     alignItems: 'center',
   },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    backgroundColor: '#0b1324',
+    color: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 14,
+    marginBottom: 10,
+  },
   filterButton: {
     backgroundColor: '#0b1324',
     borderColor: '#1e293b',
@@ -326,6 +397,48 @@ const styles = StyleSheet.create({
     color: '#fecdd3',
     fontSize: 12,
     fontWeight: '700',
+  },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  secondaryActionButton: {
+    backgroundColor: '#1f2937',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  secondaryActionText: {
+    color: '#dbeafe',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  sortRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginLeft: 'auto',
+  },
+  sortButton: {
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  sortButtonActive: {
+    backgroundColor: '#1d4ed8',
+    borderColor: '#1d4ed8',
+  },
+  sortButtonText: {
+    color: '#9ca3af',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  sortButtonTextActive: {
+    color: '#eff6ff',
   },
   listContent: {
     gap: 10,
