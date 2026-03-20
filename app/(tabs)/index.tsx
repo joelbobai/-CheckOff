@@ -22,6 +22,7 @@ type Filter = 'all' | 'active' | 'completed';
 type SortMode = 'newest' | 'oldest' | 'alphabetical';
 
 const STORAGE_KEY = 'checkoff_tasks';
+const QUICK_TEMPLATES = ['Drink water', 'Reply to emails', 'Stretch for 5 min', 'Plan tomorrow'];
 
 export default function CheckOffScreen() {
   const [tasks, setTasks] = useState<TodoItem[]>([]);
@@ -42,6 +43,14 @@ export default function CheckOffScreen() {
   const completedCount = useMemo(() => tasks.filter((task) => task.completed).length, [tasks]);
   const activeCount = totalCount - completedCount;
   const completionRate = totalCount ? Math.round((completedCount / totalCount) * 100) : 0;
+  const quickTemplateState = useMemo(
+    () =>
+      QUICK_TEMPLATES.map((template) => ({
+        label: template,
+        exists: tasks.some((task) => task.title.toLowerCase() === template.toLowerCase()),
+      })),
+    [tasks],
+  );
 
   const filteredTasks = useMemo(() => {
     const baseTasks = tasks.filter((task) => {
@@ -92,8 +101,8 @@ export default function CheckOffScreen() {
     }
   };
 
-  const addTask = () => {
-    const trimmedValue = inputValue.trim();
+  const addTaskWithTitle = (title: string) => {
+    const trimmedValue = title.trim();
     if (!trimmedValue) {
       return;
     }
@@ -105,7 +114,20 @@ export default function CheckOffScreen() {
     };
 
     setTasks((currentTasks) => [newTask, ...currentTasks]);
+  };
+
+  const addTask = () => {
+    addTaskWithTitle(inputValue);
     setInputValue('');
+  };
+
+  const addTemplateTask = (title: string) => {
+    const alreadyExists = tasks.some((task) => task.title.toLowerCase() === title.toLowerCase());
+    if (alreadyExists) {
+      return;
+    }
+
+    addTaskWithTitle(title);
   };
 
   const toggleTask = (id: string) => {
@@ -140,9 +162,19 @@ export default function CheckOffScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.container}>
         <View style={styles.headerCard}>
-          <Text style={styles.overline}>YOUR DAY, ORGANIZED</Text>
-          <Text style={styles.heading}>CheckOff</Text>
+          <View style={styles.headerTopRow}>
+            <View>
+              <Text style={styles.overline}>YOUR DAY, ORGANIZED</Text>
+              <Text style={styles.heading}>CheckOff</Text>
+            </View>
+            <View style={styles.permissionBadge}>
+              <Text style={styles.permissionBadgeText}>No permissions</Text>
+            </View>
+          </View>
           <Text style={styles.subheading}>{completionRate}% complete today</Text>
+          <Text style={styles.helperText}>
+            Quick Add works fully offline, so you can build your list without enabling any device permissions.
+          </Text>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${completionRate}%` }]} />
           </View>
@@ -177,6 +209,30 @@ export default function CheckOffScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.quickAddSection}>
+          <View style={styles.quickAddHeader}>
+            <Text style={styles.quickAddTitle}>Quick Add</Text>
+            <Text style={styles.quickAddSubtitle}>One tap, zero permissions</Text>
+          </View>
+          <View style={styles.quickAddRow}>
+            {quickTemplateState.map((template) => (
+              <Pressable
+                key={template.label}
+                onPress={() => addTemplateTask(template.label)}
+                disabled={template.exists}
+                style={[styles.quickAddChip, template.exists && styles.quickAddChipDisabled]}>
+                <Text
+                  style={[
+                    styles.quickAddChipText,
+                    template.exists && styles.quickAddChipTextDisabled,
+                  ]}>
+                  {template.exists ? `Added: ${template.label}` : `+ ${template.label}`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
         <TextInput
           placeholder="Search tasks"
           placeholderTextColor="#94a3b8"
@@ -191,7 +247,8 @@ export default function CheckOffScreen() {
               key={item}
               onPress={() => setFilter(item)}
               style={[styles.filterButton, filter === item && styles.filterButtonActive]}>
-              <Text style={[styles.filterButtonText, filter === item && styles.filterButtonTextActive]}>
+              <Text
+                style={[styles.filterButtonText, filter === item && styles.filterButtonTextActive]}>
                 {item[0].toUpperCase() + item.slice(1)}
               </Text>
             </Pressable>
@@ -236,7 +293,9 @@ export default function CheckOffScreen() {
                 {item.completed ? <Text style={styles.checkMark}>✓</Text> : null}
               </View>
 
-              <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>{item.title}</Text>
+              <Text style={[styles.taskText, item.completed && styles.taskTextCompleted]}>
+                {item.title}
+              </Text>
 
               <Pressable onPress={() => deleteTask(item.id)} style={styles.deleteButton}>
                 <Text style={styles.deleteButtonText}>Delete</Text>
@@ -267,6 +326,12 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 14,
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   overline: {
     color: '#93c5fd',
     fontSize: 11,
@@ -279,9 +344,28 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#f8fafc',
   },
+  permissionBadge: {
+    backgroundColor: '#0b1324',
+    borderColor: '#2563eb',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  permissionBadgeText: {
+    color: '#bfdbfe',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   subheading: {
     color: '#94a3b8',
-    marginTop: 4,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  helperText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 10,
   },
   progressTrack: {
@@ -345,6 +429,52 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 16,
+  },
+  quickAddSection: {
+    backgroundColor: '#0f172a',
+    borderColor: '#1e293b',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
+  },
+  quickAddHeader: {
+    marginBottom: 10,
+  },
+  quickAddTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  quickAddSubtitle: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  quickAddChip: {
+    backgroundColor: '#111827',
+    borderColor: '#1d4ed8',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  quickAddChipDisabled: {
+    borderColor: '#1f2937',
+    backgroundColor: '#0b1324',
+  },
+  quickAddChipText: {
+    color: '#dbeafe',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  quickAddChipTextDisabled: {
+    color: '#64748b',
   },
   filterRow: {
     flexDirection: 'row',
